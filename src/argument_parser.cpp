@@ -135,7 +135,7 @@ template<typename T>
 concept Numeric = std::is_arithmetic_v<T>;  // This will allow both integral and floating-point types
 
 template < Numeric Type >
-Type max_of(typename std::vector<Type>::iterator begin, typename std::vector<Type>::iterator end)
+Type max_of(const typename std::vector<Type>::iterator& begin, const typename std::vector<Type>::iterator& end)
 {
     Type result = *begin;
     for (auto it = begin; it != end; ++it)
