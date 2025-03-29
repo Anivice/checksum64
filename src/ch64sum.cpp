@@ -279,7 +279,15 @@ int main(int argc, const char **argv)
     } catch (std::exception & e) {
         std::cerr << "ERROR: " << e.what();
         char buff[128] {};
-        strerror_s(buff, sizeof(buff), errno);
+#ifdef WIN32
+        if (strerror_s(buff, sizeof(buff), errno) != 0)
+#else
+        if (strerror_r(errno, buff, sizeof(buff)) != 0)
+#endif
+        {
+            std::cerr << "Unknown error" << std::endl;
+            return EXIT_FAILURE;
+        }
         std::cerr << ": " << buff << std::endl;
         return EXIT_FAILURE;
     }
