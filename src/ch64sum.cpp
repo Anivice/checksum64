@@ -14,6 +14,7 @@
 #include <iostream>
 #include <memory>
 #include <cstring>
+#include <locale>
 
 #ifdef WIN32
 # include <io.h>
@@ -176,6 +177,10 @@ int main(int argc, const char **argv)
 
         auto single_file_hash = [](const std::string & filename)->void
         {
+            std::setlocale(LC_ALL, "C");
+#if defined(WIN32)
+            SetConsoleOutputCP(437);
+#endif
             const uint64_t checksum = hash_a_file(filename);
             std::vector < char > data;
             data.resize(sizeof(checksum));
@@ -221,8 +226,13 @@ int main(int argc, const char **argv)
             for (const auto flist = static_cast<Arguments::args_t>(args).at("checksum");
                 const auto & filename : flist)
             {
-                std::ifstream file_stream(filename);
+                std::ifstream file_stream(filename, std::ios::in);
                 std::string line;
+
+                if (!file_stream) {
+                    throw std::runtime_error("Could not open file " + filename);
+                }
+
                 while (std::getline(file_stream, line))
                 {
                     const auto pos = line.find_last_of(':');
@@ -233,7 +243,12 @@ int main(int argc, const char **argv)
                     const std::string fname = line.substr(0, pos);
                     std::string checksum = line.substr(pos + 1);
                     replace_all(checksum, " ", "");
-                    const uint64_t real_checksum = hash_a_file(fname);
+                    uint64_t real_checksum = 0;
+                    try {
+                        real_checksum = hash_a_file(fname);
+                    } catch (const std::exception & e) {
+                        debug::log(debug::to_stderr, debug::error_log, e.what(), "\n");
+                    }
                     std::vector < char > data;
                     data.resize(sizeof(real_checksum));
                     (*reinterpret_cast<uint64_t *>(data.data())) = real_checksum;
