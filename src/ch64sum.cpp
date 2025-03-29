@@ -1,3 +1,7 @@
+#ifndef WIN32
+#define _POSIX_C_SOURCE 200809L
+#endif
+
 #include "log.hpp"
 #include "argument_parser.h"
 #include "bin2hex.h"
@@ -281,14 +285,16 @@ int main(int argc, const char **argv)
         char buff[128] {};
 #ifdef WIN32
         if (strerror_s(buff, sizeof(buff), errno) != 0)
-#else
-        if (strerror_r(errno, buff, sizeof(buff)) != 0)
-#endif
         {
             std::cerr << "Unknown error" << std::endl;
             return EXIT_FAILURE;
         }
         std::cerr << ": " << buff << std::endl;
         return EXIT_FAILURE;
+#else
+        auto ret = strerror_r(errno, buff, sizeof(buff));
+        std::cerr << ": " << ret << std::endl;
+        return EXIT_FAILURE;
+#endif
     }
 }
