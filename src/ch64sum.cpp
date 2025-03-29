@@ -121,7 +121,7 @@ uint64_t hash_a_file(const std::string& filename)
             throw std::runtime_error("Cannot read file " + filename);
         }
 
-        if (size == 0) {
+        if (size == 0 && crc64.get_checksum() == 0xFFFFFFFFFFFFFFFF) {
             debug::log(debug::to_stderr, debug::warning_log, filename + " is an empty file.\n");
         }
 
