@@ -116,6 +116,12 @@ namespace debug {
     inline class error_log_t {} error_log;
     construct_simple_type_compare(error_log_t);
 
+    inline class to_stdout_t {} to_stdout;
+    construct_simple_type_compare(to_stdout_t);
+
+    inline class to_stderr_t {} to_stderr;
+    construct_simple_type_compare(to_stderr_t);
+
     template <typename T>
     struct is_pair : std::false_type
     {
@@ -255,6 +261,12 @@ namespace debug {
                 _log(param.second);
                 LOG_DEV << ">";
             }
+        } else if constexpr (debug::is_to_stderr_t_v<ParamType>) {
+            debug::LOG_DEV_ptr = &std::cerr;
+            debug::LOG_DEV_FILE = stderr;
+        } else if constexpr (debug::is_to_stdout_t_v<ParamType>) {
+            debug::LOG_DEV_ptr = &std::cout;
+            debug::LOG_DEV_FILE = stdout;
         }
         else {
             if (level_check()) {

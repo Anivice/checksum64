@@ -2,6 +2,9 @@
 #include <stdexcept>
 #include <sstream>
 #include <algorithm>
+#include <filesystem>
+#include <iostream>
+#include <type_traits>
 
 void replace_all(std::string& original, const std::string& target, const std::string& replacement)
 {
@@ -86,7 +89,8 @@ Arguments::Arguments(const int argc, const char* argv[], predefined_args_t prede
             arguments[arg_key_str].push_back(this_arg);
             last_is_an_option = false;
         }
-        else if (this_arg[0] == '-') {
+        else if (this_arg[0] == '-' && this_arg.size() != 1)
+        {
             // Handle argument with key
             replace_all(this_arg, "-", ""); // Remove leading '-'
 
@@ -124,5 +128,47 @@ Arguments::Arguments(const int argc, const char* argv[], predefined_args_t prede
         if (key != "BARE" && get_single_arg_by_fullname(key).value_required && val.empty()) {
             throw std::invalid_argument("Key `" + key + "` expects a value");
         }
+    }
+}
+
+template<typename T>
+concept Numeric = std::is_arithmetic_v<T>;  // This will allow both integral and floating-point types
+
+template < Numeric Type >
+Type max_of(typename std::vector<Type>::iterator begin, typename std::vector<Type>::iterator end)
+{
+    Type result = *begin;
+    for (auto it = begin; it != end; ++it)
+    {
+        if (*it > result) {
+            result = *it;
+        }
+    }
+
+    return result;
+}
+
+void Arguments::print_help() const
+{
+    std::vector<std::pair < std::string, std::string > > arg_name_list;
+    std::vector<uint64_t> arg_name_len_list;
+    for (const auto& arg : predefined_args)
+    {
+        std::stringstream ss;
+        ss << "-" << arg.short_name << ",--" << arg.name;
+        arg_name_list.emplace_back(ss.str(), arg.explanation);
+        arg_name_len_list.emplace_back(arg_name_list.back().first.size());
+    }
+
+    const auto max_len = max_of<uint64_t>(arg_name_len_list.begin(), arg_name_len_list.end());
+    for (const auto& [arg_name, explanation] : arg_name_list)
+    {
+        constexpr uint64_t padding_size = 16;
+        std::cout << "    " << arg_name
+                  << std::string(std::max(
+                      static_cast<signed long long>(padding_size) - static_cast<signed long long>(max_len),
+                      1ll),
+                      ' ')
+                  << explanation << std::endl;
     }
 }

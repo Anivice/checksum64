@@ -1,12 +1,6 @@
 cmake_minimum_required(VERSION 3.10)
 project(checksum64 C CXX)
 
-# Enable Ccache support
-find_program(CCACHE_PROGRAM ccache REQUIRED)
-if(NOT CCACHE_PROGRAM)
-    message(FATAL_ERROR "ccache not found! Please install ccache or adjust the configuration.")
-endif()
-
 # Set ccache as the compiler launcher before setting the compiler
 set(CMAKE_C_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
 set(CMAKE_CXX_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
