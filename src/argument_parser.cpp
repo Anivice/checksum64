@@ -163,10 +163,12 @@ void Arguments::print_help() const
     const auto max_len = max_of<uint64_t>(arg_name_len_list.begin(), arg_name_len_list.end());
     for (const auto& [arg_name, explanation] : arg_name_list)
     {
-        constexpr uint64_t padding_size = 16;
+        constexpr uint64_t padding_size = 4;
         std::cout << "    " << arg_name
                   << std::string(std::max(
-                      static_cast<signed long long>(padding_size) - static_cast<signed long long>(max_len),
+                      static_cast<signed long long>(padding_size)
+                      + (static_cast<signed long long>(max_len)
+                          - static_cast<signed long long>(arg_name.size())),
                       1ll),
                       ' ')
                   << explanation << std::endl;
