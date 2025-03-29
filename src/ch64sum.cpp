@@ -9,13 +9,16 @@
 #include <fstream>
 #include <iostream>
 #include <memory>
+#include <cstring>
 
 #ifdef WIN32
 # include <io.h>
 # include <fcntl.h>
 # include <windows.h>
-#define _CRTDBG_MAP_ALLOC
-# include <crtdbg.h>
+# ifdef __DEBUG__
+#  define _CRTDBG_MAP_ALLOC
+#  include <crtdbg.h>
+# endif // __DEBUG__
 #endif // WIN32
 
 class CRC64 {
@@ -70,6 +73,12 @@ Arguments::predefined_args_t arguments = {
         .value_required = false,
         .explanation = "Use uppercase hex value"
     },
+    Arguments::single_arg_t {
+        .name = "help",
+        .short_name = 'h',
+        .value_required = false,
+        .explanation = "Show this help message"
+    },
 };
 
 void replace_all(std::string&, const std::string&, const std::string&);
@@ -102,9 +111,13 @@ uint64_t hash_a_file(const std::string& filename)
     {
         file_stream->read(reinterpret_cast<char *>(buffer.data()), buffer.size());
         const auto size = file_stream->gcount();
-        if (size <= 0)
+        if (size < 0)
         {
-            throw std::runtime_error("Cannot read file");
+            throw std::runtime_error("Cannot read file " + filename);
+        }
+
+        if (size == 0) {
+            debug::log(debug::to_stderr, debug::warning_log, filename + " is an empty file.\n");
         }
 
         crc64.update(buffer.data(), size);
@@ -256,12 +269,18 @@ int main(int argc, const char **argv)
                     }
                 }
             }
+        } else if (static_cast<Arguments::args_t>(args).contains("help")) {
+            print_help();
+            return EXIT_SUCCESS;
         } else {
             single_file_hash("STDIN");
             return EXIT_SUCCESS;
         }
     } catch (std::exception & e) {
-        std::cerr << "ERROR: " << e.what() << std::endl;
+        std::cerr << "ERROR: " << e.what();
+        char buff[128] {};
+        strerror_s(buff, sizeof(buff), errno);
+        std::cerr << ": " << buff << std::endl;
         return EXIT_FAILURE;
     }
 }

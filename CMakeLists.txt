@@ -29,8 +29,8 @@ add_library(log OBJECT src/log.cpp src/include/log.hpp)
 add_library(libbin2hex OBJECT src/bin2hex.cpp src/include/bin2hex.h)
 
 include_directories(src/include)
-add_executable(ch64sum
+add_executable(crc64sum
         src/ch64sum.cpp
         src/argument_parser.cpp src/include/argument_parser.h
 )
-target_link_libraries(ch64sum PRIVATE log libbin2hex)
+target_link_libraries(crc64sum PRIVATE log libbin2hex)
