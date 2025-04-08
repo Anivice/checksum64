@@ -360,7 +360,7 @@ int main(int argc, const char **argv)
                                        << std::endl;
                         } else {
                             if (is_colorful()) {
-                                std::cout << "\033[32;1m" "OK  " "\033[0m" << fname << std::endl;
+                                std::cout << "\033[32;1m" "OK  " + fname + "\033[0m" << std::endl;
                             } else {
                                 std::cout << "OK  " << fname << std::endl;
                             }
@@ -378,7 +378,7 @@ int main(int argc, const char **argv)
                                        << std::endl;
                         } else {
                             if (is_colorful()) {
-                                std::cout << "\033[31;1m" "BAD " "\033[0m" << fname << std::endl;
+                                std::cout << "\033[31;1m" "BAD " + fname + "\033[0m" << std::endl;
                             } else {
                                 std::cout << "BAD " << fname << std::endl;
                             }
