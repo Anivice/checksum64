@@ -360,7 +360,7 @@ int main(int argc, const char **argv)
                                        << std::endl;
                         } else {
                             if (is_colorful()) {
-                                std::cout << "\033[32;1m" "OK  " "\033[0m" << std::endl;
+                                std::cout << "\033[32;1m" "OK  " "\033[0m" << fname << std::endl;
                             } else {
                                 std::cout << "OK  " << fname << std::endl;
                             }
@@ -378,7 +378,7 @@ int main(int argc, const char **argv)
                                        << std::endl;
                         } else {
                             if (is_colorful()) {
-                                std::cout << "\033[31;1m" "BAD " "\033[0m" << std::endl;
+                                std::cout << "\033[31;1m" "BAD " "\033[0m" << fname << std::endl;
                             } else {
                                 std::cout << "BAD " << fname << std::endl;
                             }
@@ -396,7 +396,8 @@ int main(int argc, const char **argv)
                     std::cout << "This file failed the test: " << std::endl;
                 }
                 for (const auto & f : bad_files) {
-                    std::cout << "    " << f << std::endl;
+                    std::cout << "    " << (is_colorful() ?  "\033[31;1m" : "")
+                              << f << (is_colorful() ?  "\033[0m" : "") << std::endl;
                 }
             }
 
