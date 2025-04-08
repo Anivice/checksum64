@@ -1,3 +1,24 @@
+/* ch64sum.cpp
+ *
+ * Copyright 2025 Anivice Ives
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
+
 #ifndef WIN32
 #define _POSIX_C_SOURCE 200809L
 #endif
@@ -84,6 +105,12 @@ Arguments::predefined_args_t arguments = {
         .value_required = false,
         .explanation = "Show this help message"
     },
+    Arguments::single_arg_t {
+        .name = "version",
+        .short_name = 'v',
+        .value_required = false,
+        .explanation = "Show version"
+    },
 };
 
 void replace_all(std::string&, const std::string&, const std::string&);
@@ -107,7 +134,7 @@ uint64_t hash_a_file(const std::string& filename)
     }
 
     if (!file_stream || !*file_stream) {
-        throw std::runtime_error("Could not open file " + filename);
+        throw std::runtime_error("Could not open file: " + filename);
     }
 
     std::array <uint8_t, 4 * 1024> buffer{};
@@ -118,7 +145,7 @@ uint64_t hash_a_file(const std::string& filename)
         const auto size = file_stream->gcount();
         if (size < 0)
         {
-            throw std::runtime_error("Cannot read file " + filename);
+            throw std::runtime_error("Cannot read file: " + filename);
         }
 
         if (size == 0 && crc64.get_checksum() == 0xFFFFFFFFFFFFFFFF) {
@@ -133,22 +160,79 @@ uint64_t hash_a_file(const std::string& filename)
 
 bool is_utf8()
 {
+    static bool I_have_checked_and_is_true = false;
+
+    if (I_have_checked_and_is_true) {
+        return true;
+    }
+
+#ifdef WIN32
+    // Enable if possible
+    if (!SetConsoleOutputCP(CP_UTF8)) {
+        return false;
+    }
+#endif // WIN32
+
     const auto lang = getEnvVar("LANG");
     const auto lc_ctype = getEnvVar("LC_CTYPE");
 
     if (lang.find("UTF-8") != std::string::npos) {
+        I_have_checked_and_is_true = true;
         return true;
     }
 
     if (lc_ctype.find("UTF-8") != std::string::npos) {
+        I_have_checked_and_is_true = true;
         return true;
     }
 
 #ifdef WIN32
     if (GetConsoleOutputCP() == 65001) {
+        I_have_checked_and_is_true = true;
         return true;
     }
 #endif
+
+    return false;
+}
+
+bool is_colorful()
+{
+    static bool I_have_checked_and_is_true = false;
+
+    if (I_have_checked_and_is_true) {
+        return true;
+    }
+
+#ifdef WIN32
+    HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
+    DWORD mode;
+    if (!GetConsoleMode(h, &mode)) {
+        return false;
+    }
+
+    // Enable if possible
+    if (!SetConsoleMode(h, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING)) {
+        return false;
+    }
+
+    // query again
+    if (!GetConsoleMode(h, &mode)) {
+        return false;
+    }
+
+    if (mode & ENABLE_VIRTUAL_TERMINAL_PROCESSING) {
+        I_have_checked_and_is_true = true;
+        return true;
+    }
+#endif
+
+    const auto lang = getEnvVar("TERM");
+
+    if (lang.find("xterm-256color") != std::string::npos) {
+        I_have_checked_and_is_true = true;
+        return true;
+    }
 
     return false;
 }
@@ -223,6 +307,10 @@ int main(int argc, const char **argv)
         }
         else if (static_cast<Arguments::args_t>(args).contains("checksum"))
         {
+            std::vector < std::string > good_files;
+            std::vector < std::string > bad_files;
+            uint64_t file_count = 0;
+
             for (const auto flist = static_cast<Arguments::args_t>(args).at("checksum");
                 const auto & filename : flist)
             {
@@ -230,14 +318,15 @@ int main(int argc, const char **argv)
                 std::string line;
 
                 if (!file_stream) {
-                    throw std::runtime_error("Could not open file " + filename);
+                    throw std::runtime_error("Could not open file: " + filename);
                 }
 
                 while (std::getline(file_stream, line))
                 {
                     const auto pos = line.find_last_of(':');
                     if (pos == std::string::npos || pos == 0) {
-                        throw std::runtime_error("Invalid checksum file format");
+                        debug::log(debug::to_stderr, debug::error_log, "Invalid checksum file format\n");
+                        continue; // skip ill-formatted parts
                     }
 
                     const std::string fname = line.substr(0, pos);
@@ -245,6 +334,7 @@ int main(int argc, const char **argv)
                     replace_all(checksum, " ", "");
                     uint64_t real_checksum = 0;
                     try {
+                        file_count++; // before checksum, increase file_count
                         real_checksum = hash_a_file(fname);
                     } catch (const std::exception & e) {
                         debug::log(debug::to_stderr, debug::error_log, e.what(), "\n");
@@ -260,36 +350,96 @@ int main(int argc, const char **argv)
                     checksum = remove_non_printable(checksum);
                     if (real_hex == checksum)
                     {
+                        good_files.emplace_back(fname);
                         if (is_utf8()) {
-                        #ifdef WIN32
-                            SetConsoleOutputCP(CP_UTF8);
-                        #endif // WIN32
                             std::vector<unsigned char> CheckMark = {0xE2, 0x9C, 0x94, 0xEf, 0xB8, 0x8F}; /* ✔️ */
                             std::cout.write(reinterpret_cast<const char*>(CheckMark.data()),
                                 static_cast<signed long long>(CheckMark.size()));
-                            std::cout  << "    " << fname << std::endl;
+                            std::cout  << "    "
+                                       << (is_colorful() ? "\033[32;1m" + fname + "\033[0m" : fname)
+                                       << std::endl;
                         } else {
-                            std::cout << "OK  " << fname << std::endl;
+                            if (is_colorful()) {
+                                std::cout << "\033[32;1m" "OK  " "\033[0m" << std::endl;
+                            } else {
+                                std::cout << "OK  " << fname << std::endl;
+                            }
                         }
                     }
                     else
                     {
+                        bad_files.emplace_back(fname);
                         if (is_utf8()) {
-                        #ifdef WIN32
-                            SetConsoleOutputCP(CP_UTF8);
-                        #endif // WIN32
                             std::vector<unsigned char> CrossMark = {0xE2, 0x9D, 0x8C}; /* ❌ */
                             std::cout.write(reinterpret_cast<const char*>(CrossMark.data()),
                                 static_cast<signed long long>(CrossMark.size()));
-                            std::cout  << "    " << fname << std::endl;
+                            std::cout  << "    "
+                                       << (is_colorful() ? "\033[31;1m" + fname + "\033[0m" : fname)
+                                       << std::endl;
                         } else {
-                            std::cout << "BAD  " << fname << std::endl;
+                            if (is_colorful()) {
+                                std::cout << "\033[31;1m" "BAD " "\033[0m" << std::endl;
+                            } else {
+                                std::cout << "BAD " << fname << std::endl;
+                            }
                         }
                     }
                 }
             }
+
+            if (!bad_files.empty())
+            {
+                std::cout << "Checksum summary:" << std::endl;
+                if (bad_files.size() > 1) {
+                    std::cout << "These files failed the test: " << std::endl;
+                } else {
+                    std::cout << "This file failed the test: " << std::endl;
+                }
+                for (const auto & f : bad_files) {
+                    std::cout << "    " << f << std::endl;
+                }
+            }
+
+            std::cout << "Checksum completed (Good/Bad/All) ("
+                      << (is_colorful() ? "\033[32;1m" : "")
+                      << good_files.size() << (is_colorful() ? "\033[0m" : "") << "/"
+                      << (is_colorful() ? (bad_files.empty() ? "\033[32;1m" : "\033[31;1m") : "")
+                      << bad_files.size() << (is_colorful() ? "\033[0m" : "") << "/"
+                      << (is_colorful() ? "\033[34;1m" : "") << file_count << (is_colorful() ? "\033[0m" : "")
+                      << ")" << std::endl;
+            if (good_files.size() == file_count && bad_files.empty())
+            {
+                std::cout << (is_colorful() ? "\033[32;1m" : "")
+                          << "File integrity ensured"
+                          << (is_colorful() ? "\033[0m" : "")
+                          << std::endl;
+                return EXIT_SUCCESS;
+            } else {
+                std::cout << (is_colorful() ? "\033[31;1m" : "")
+                          << "File integrity violated"
+                          << (is_colorful() ? "\033[0m" : "")
+                          << std::endl;
+                return EXIT_FAILURE;
+            }
         } else if (static_cast<Arguments::args_t>(args).contains("help")) {
             print_help();
+            return EXIT_SUCCESS;
+        } else if (static_cast<Arguments::args_t>(args).contains("version")) {
+#if defined(WIN32)
+            auto basename = [](const std::string & path)->std::string {
+                return path.substr(path.find_last_of('\\') + 1);
+            };
+            std::cout << basename(*argv);
+#else  // defined(WIN32)
+            std::cout << *argv;
+#endif // defined(WIN32)
+            std::cout << " [CRC64 ";
+            if (is_colorful()) {
+                std::cout << "\033[0;1;4;7m" "NON-STANDARD" "\033[0m";
+            } else {
+                std::cout <<  "**NON-STANDARD**";
+            }
+            std::cout << " CHECKSUM] Version " CRC64_VERSION << std::endl;
             return EXIT_SUCCESS;
         } else {
             single_file_hash("STDIN");

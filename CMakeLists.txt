@@ -1,3 +1,23 @@
+#  CMakeLists.txt
+#
+#  Copyright 2025 Anivice Ives
+#
+#  This program is free software: you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License as published by
+#  the Free Software Foundation, either version 3 of the License, or
+#  (at your option) any later version.
+# 
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+# 
+#  You should have received a copy of the GNU General Public License
+#  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+# 
+#  SPDX-License-Identifier: GPL-3.0-or-later
+#
+
 cmake_minimum_required(VERSION 3.10)
 project(checksum64 C CXX)
 
@@ -20,10 +40,9 @@ set(CMAKE_VISIBILITY_INLINES_HIDDEN 1)
 
 if ("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
     add_compile_definitions(__DEBUG__)
-else ()
-    add_compile_options(${optimization_flags})
-    add_compile_options(${optimization_link_flags})
 endif ()
+
+add_compile_definitions(CRC64_VERSION="1.0.1")
 
 add_library(log OBJECT src/log.cpp src/include/log.hpp)
 add_library(libbin2hex OBJECT src/bin2hex.cpp src/include/bin2hex.h)
