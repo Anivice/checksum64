@@ -22,11 +22,11 @@ A simple CRC64 checksum tool
 > For example, 7-Zip produces checksum with big endianness in its utility set,
 > hence the reason why this utility uses big endianness by default.
 > However, little endianness is more often than not preferred by many other utilities.
-> `crc64sum` accepts two options that changes its output endianness, as stated above, `little` and `big`.
+> `crc64sum` accepts two options that change its output endianness, as stated above, `little` and `big`.
 
 # How to build
 
-This tools supports both Linux and Windows and uses CMake to bridge different building systems.
+This tool supports both Linux and Windows and uses CMake to bridge different building systems.
 
 To build this tool, use the following command:
 
