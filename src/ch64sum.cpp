@@ -20,7 +20,7 @@
 
 
 #ifndef WIN32
-#define _POSIX_C_SOURCE 200809L
+# define _POSIX_C_SOURCE 200809L
 #endif
 
 #include "log.hpp"
@@ -155,12 +155,31 @@ uint64_t hash_a_file(std::string filename)
 #else
 uint64_t hash_a_file(const std::string& filename)
 {
+    DWORD originalMode { };
 #endif
     std::unique_ptr<std::istream> file_stream;
     if (filename != "STDIN") {
         file_stream = std::make_unique<std::ifstream>(filename, std::ios::in | std::ios::binary);
     } else {
         file_stream = std::make_unique<std::istream>(std::cin.rdbuf());
+#ifdef WIN32
+# ifdef __DEBUG__
+        debug::log(debug::to_stderr, debug::debug_log, "Line buffering disabled\n");
+# endif // __DEBUG__
+        if (const auto hIn = GetStdHandle(STD_INPUT_HANDLE);
+            !GetConsoleMode(hIn, &originalMode))
+        {
+            debug::log(debug::to_stderr, debug::debug_log, "GetConsoleMode failed\n");
+        }
+        else
+        {
+            DWORD mode = originalMode;
+            mode &= ~(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT);
+            if (!SetConsoleMode(hIn, mode)) {
+                debug::log(debug::to_stderr, debug::debug_log, "SetConsoleMode failed\n");
+            }
+        }
+#endif
     }
 
     if (!file_stream || !*file_stream) {
@@ -184,6 +203,20 @@ uint64_t hash_a_file(const std::string& filename)
 
         crc64.update(buffer.data(), size);
     } while (*file_stream);
+
+    if (filename == "STDIN")
+    {
+#ifdef WIN32
+        if (const auto hIn = GetStdHandle(STD_INPUT_HANDLE);
+            !SetConsoleMode(hIn, originalMode))
+        {
+            debug::log(debug::to_stderr, debug::debug_log, "SetConsoleMode failed\n");
+        }
+# ifdef __DEBUG__
+        debug::log(debug::to_stderr, debug::debug_log, "Line buffering enabled\n");
+# endif // __DEBUG__
+#endif
+    }
 
     return crc64.get_checksum(endian);
 }
