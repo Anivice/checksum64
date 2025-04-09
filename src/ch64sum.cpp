@@ -34,7 +34,6 @@
 #include <fstream>
 #include <iostream>
 #include <memory>
-#include <cstring>
 #include <locale>
 
 #ifdef WIN32
@@ -46,6 +45,8 @@
 #  include <crtdbg.h>
 # endif // __DEBUG__
 #endif // WIN32
+
+enum endian_t { LITTLE_ENDIAN, BIG_ENDIAN };
 
 class CRC64 {
 public:
@@ -59,14 +60,18 @@ public:
         }
     }
 
-    [[nodiscard]] uint64_t get_checksum() const {
-        return crc64_value;
+    [[nodiscard]] uint64_t get_checksum(const endian_t endian = BIG_ENDIAN
+        /* CRC64 tools like 7ZIP display in BIG_ENDIAN */) const
+    {
+        // add the final complement that ECMA‑182 requires
+        return (endian == BIG_ENDIAN
+            ? reverse_bytes(crc64_value ^ 0xFFFFFFFFFFFFFFFFULL)
+            : (crc64_value ^ 0xFFFFFFFFFFFFFFFFULL));
     }
 
 private:
     uint64_t crc64_value{};
-
-    static uint64_t table[256];
+    uint64_t table[256] {};
 
     void init_crc64()
     {
@@ -82,9 +87,15 @@ private:
             table[i] = crc;
         }
     }
-};
 
-uint64_t CRC64::table[256] = {};
+    static uint64_t reverse_bytes(uint64_t x)
+    {
+        x = ((x & 0x00000000FFFFFFFFULL) << 32) | ((x & 0xFFFFFFFF00000000ULL) >> 32);
+        x = ((x & 0x0000FFFF0000FFFFULL) << 16) | ((x & 0xFFFF0000FFFF0000ULL) >> 16);
+        x = ((x & 0x00FF00FF00FF00FFULL) << 8)  | ((x & 0xFF00FF00FF00FF00ULL) >> 8);
+        return x;
+    }
+};
 
 Arguments::predefined_args_t arguments = {
     Arguments::single_arg_t {
@@ -100,6 +111,12 @@ Arguments::predefined_args_t arguments = {
         .explanation = "Use uppercase hex value"
     },
     Arguments::single_arg_t {
+        .name = "endian",
+        .short_name = 'e',
+        .value_required = true,
+        .explanation = "Endianness, acceptable options are little or big (default)"
+    },
+    Arguments::single_arg_t {
         .name = "help",
         .short_name = 'h',
         .value_required = false,
@@ -111,12 +128,19 @@ Arguments::predefined_args_t arguments = {
         .value_required = false,
         .explanation = "Show version"
     },
+    Arguments::single_arg_t {
+        .name = "clear",
+        .short_name = 'a',
+        .value_required = false,
+        .explanation = "Disable color codes and UTF-8 codes"
+    },
 };
 
 void replace_all(std::string&, const std::string&, const std::string&);
 std::string getEnvVar(const std::string &);
 
-bool uppercase = false;
+endian_t endian;
+bool disable_all_bullshit_codes = false;
 
 #ifndef WIN32
 uint64_t hash_a_file(std::string filename)
@@ -148,27 +172,40 @@ uint64_t hash_a_file(const std::string& filename)
             throw std::runtime_error("Cannot read file: " + filename);
         }
 
-        if (size == 0 && crc64.get_checksum() == 0xFFFFFFFFFFFFFFFF) {
+        if (size == 0 && crc64.get_checksum(LITTLE_ENDIAN) == 0x00) {
             debug::log(debug::to_stderr, debug::warning_log, filename + " is an empty file.\n");
         }
 
         crc64.update(buffer.data(), size);
     } while (*file_stream);
 
-    return crc64.get_checksum();
+    return crc64.get_checksum(endian);
 }
 
 bool is_utf8()
 {
-    static bool I_have_checked_and_is_true = false;
+    if (disable_all_bullshit_codes) {
+        return false;
+    }
 
-    if (I_have_checked_and_is_true) {
+    static bool I_have_checked_and_it_is_true = false;
+    static bool I_have_checked_and_it_is_false = false;
+
+    if (I_have_checked_and_it_is_true) {
         return true;
+    }
+
+    if (I_have_checked_and_it_is_false) {
+        return false;
     }
 
 #ifdef WIN32
     // Enable if possible
     if (!SetConsoleOutputCP(CP_UTF8)) {
+#ifdef __DEBUG__
+        debug::log(debug::to_stderr, debug::debug_log, "UTF-8 disabled since SetConsoleOutputCP failed\n");
+#endif
+        I_have_checked_and_it_is_false = true;
         return false;
     }
 #endif // WIN32
@@ -177,63 +214,123 @@ bool is_utf8()
     const auto lc_ctype = getEnvVar("LC_CTYPE");
 
     if (lang.find("UTF-8") != std::string::npos) {
-        I_have_checked_and_is_true = true;
+#ifdef __DEBUG__
+        debug::log(debug::to_stderr, debug::debug_log, "UTF-8 enabled since $LANG has UTF-8 indicator\n");
+#endif
+        I_have_checked_and_it_is_true = true;
         return true;
     }
 
     if (lc_ctype.find("UTF-8") != std::string::npos) {
-        I_have_checked_and_is_true = true;
+#ifdef __DEBUG__
+        debug::log(debug::to_stderr, debug::debug_log, "UTF-8 enabled since $LC_CTYPE has UTF-8 indicator\n");
+#endif
+        I_have_checked_and_it_is_true = true;
         return true;
     }
 
 #ifdef WIN32
-    if (GetConsoleOutputCP() == 65001) {
-        I_have_checked_and_is_true = true;
+    if (const auto WT_SESSION = getEnvVar("WT_SESSION"); // New Windows Terminal (Win11)
+        !WT_SESSION.empty())
+    {
+#ifdef __DEBUG__
+        debug::log(debug::to_stderr, debug::debug_log, "UTF-8 enabled since this is the new Windows 11 Terminal\n");
+#endif
+        I_have_checked_and_it_is_true = true;
         return true;
     }
 #endif
 
+#ifdef __DEBUG__
+    debug::log(debug::to_stderr, debug::debug_log, "UTF-8 disabled since all methods failed\n");
+#endif
+    I_have_checked_and_it_is_false = true;
     return false;
 }
 
 bool is_colorful()
 {
-    static bool I_have_checked_and_is_true = false;
+    if (disable_all_bullshit_codes) {
+        return false;
+    }
 
-    if (I_have_checked_and_is_true) {
+    static bool I_have_checked_and_it_is_true = false;
+    static bool I_have_checked_and_it_is_false = false;
+
+    if (I_have_checked_and_it_is_true) {
         return true;
+    }
+
+    if (I_have_checked_and_it_is_false) {
+        return false;
     }
 
 #ifdef WIN32
     HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
     DWORD mode;
     if (!GetConsoleMode(h, &mode)) {
+#ifdef __DEBUG__
+        debug::log(debug::to_stderr, debug::debug_log, "Color code disabled since GetConsoleMode failed\n");
+#endif
+        I_have_checked_and_it_is_false = true;
         return false;
     }
 
     // Enable if possible
     if (!SetConsoleMode(h, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING)) {
+#ifdef __DEBUG__
+        debug::log(debug::to_stderr, debug::debug_log, "Color code disabled since SetConsoleMode failed\n");
+#endif
+        I_have_checked_and_it_is_false = true;
         return false;
+    }
+#endif
+
+    if (const auto lang = getEnvVar("TERM");
+        lang.find("xterm-256color") != std::string::npos)
+    {
+#ifdef __DEBUG__
+        debug::log(debug::to_stderr, debug::debug_log, "Color code enabled since $TERM is xterm-256color\n");
+#endif
+        I_have_checked_and_it_is_true = true;
+        return true;
+    }
+
+#ifdef WIN32
+    if (const auto WT_SESSION = getEnvVar("WT_SESSION"); // New Windows Terminal (Win11)
+        !WT_SESSION.empty())
+    {
+#ifdef __DEBUG__
+        debug::log(debug::to_stderr, debug::debug_log, "Color code enabled since this is the new Windows 11 Terminal\n");
+#endif
+        I_have_checked_and_it_is_true = true;
+        return true;
     }
 
     // query again
     if (!GetConsoleMode(h, &mode)) {
+#ifdef __DEBUG__
+        debug::log(debug::to_stderr, debug::debug_log, "Color code disabled since GetConsoleMode failed\n");
+#endif
+        I_have_checked_and_it_is_false = true;
         return false;
     }
 
     if (mode & ENABLE_VIRTUAL_TERMINAL_PROCESSING) {
-        I_have_checked_and_is_true = true;
+#ifdef __DEBUG__
+        debug::log(debug::to_stderr, debug::debug_log,
+            "Color code enabled since ENABLE_VIRTUAL_TERMINAL_PROCESSING flag is set\n");
+#endif
+        I_have_checked_and_it_is_true = true;
         return true;
     }
 #endif
 
-    const auto lang = getEnvVar("TERM");
-
-    if (lang.find("xterm-256color") != std::string::npos) {
-        I_have_checked_and_is_true = true;
-        return true;
-    }
-
+#ifdef __DEBUG__
+    debug::log(debug::to_stderr, debug::debug_log,
+        "Color code disabled since all methods indicates a failure\n");
+#endif
+    I_have_checked_and_it_is_false = true;
     return false;
 }
 
@@ -252,14 +349,34 @@ int main(int argc, const char **argv)
 {
 #if defined(WIN32) && defined(__DEBUG__)
     _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
+    debug::log_level = debug::DEBUG;
+#else
+    debug::log_level = debug::WARNING;
 #endif
 
     try
     {
         const Arguments args(argc, argv, arguments);
-        uppercase = static_cast<Arguments::args_t>(args).contains("uppercase");
+        bool uppercase = static_cast<Arguments::args_t>(args).contains("uppercase");
+        disable_all_bullshit_codes = static_cast<Arguments::args_t>(args).contains("clear");
+        endian = BIG_ENDIAN;
+        if (const auto arg_value_ref = static_cast<Arguments::args_t>(args);
+            arg_value_ref.contains("endian"))
+        {
+            if (arg_value_ref.at("endian").size() != 1) {
+                throw std::runtime_error("Multiple definition of endianness");
+            }
 
-        auto single_file_hash = [](const std::string & filename)->void
+            if (arg_value_ref.at("endian").at(0) == "big") {
+                endian = BIG_ENDIAN;
+            } else if (arg_value_ref.at("endian").at(0) == "little") {
+                endian = LITTLE_ENDIAN;
+            } else {
+                throw std::runtime_error("Unknown endianness");
+            }
+        }
+
+        auto single_file_hash = [uppercase](const std::string & filename)->void
         {
             std::setlocale(LC_ALL, "C");
 #if defined(WIN32)
@@ -293,7 +410,11 @@ int main(int argc, const char **argv)
         _setmode(_fileno(stdin), _O_BINARY);
 #endif
 
-        if (static_cast<Arguments::args_t>(args).contains("BARE"))
+        if (static_cast<Arguments::args_t>(args).contains("help")) {
+            print_help();
+            return EXIT_SUCCESS;
+        }
+        else if (static_cast<Arguments::args_t>(args).contains("BARE"))
         {
             for (const auto flist = static_cast<Arguments::args_t>(args).at("BARE");
                 const auto & filename : flist)
@@ -304,6 +425,7 @@ int main(int argc, const char **argv)
                     single_file_hash(filename);
                 }
             }
+            return EXIT_SUCCESS;
         }
         else if (static_cast<Arguments::args_t>(args).contains("checksum"))
         {
@@ -422,9 +544,6 @@ int main(int argc, const char **argv)
                           << std::endl;
                 return EXIT_FAILURE;
             }
-        } else if (static_cast<Arguments::args_t>(args).contains("help")) {
-            print_help();
-            return EXIT_SUCCESS;
         } else if (static_cast<Arguments::args_t>(args).contains("version")) {
 #if defined(WIN32)
             auto basename = [](const std::string & path)->std::string {

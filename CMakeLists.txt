@@ -39,10 +39,10 @@ set(CMAKE_CXX_VISIBILITY_PRESET hidden)
 set(CMAKE_VISIBILITY_INLINES_HIDDEN 1)
 
 if ("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
-    add_compile_definitions(__DEBUG__)
+    add_compile_definitions(__DEBUG__=\(1\))
 endif ()
 
-add_compile_definitions(CRC64_VERSION="1.0.1")
+add_compile_definitions(CRC64_VERSION="1.0.3")
 
 add_library(log OBJECT src/log.cpp src/include/log.hpp)
 add_library(libbin2hex OBJECT src/bin2hex.cpp src/include/bin2hex.h)
