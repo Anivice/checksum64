@@ -35,6 +35,7 @@
 #include <iostream>
 #include <memory>
 #include <locale>
+#include <cstring>
 
 #ifdef WIN32
 # include <io.h>
