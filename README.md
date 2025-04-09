@@ -22,7 +22,7 @@ A simple CRC64 checksum tool
 > For example, 7-Zip produces checksum with big endianness in its utility set,
 > hence the reason why this utility uses big endianness by default.
 > However, little endianness is more often than not preferred by many other utilities.
-> `crc64sum` accepts two arguments for option `--endian`: `little` and `big`.
+> `crc64sum` accepts two arguments, `little` and `big`, for option `--endian` to change endianness for its output.
 
 # How to build
 
