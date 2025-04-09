@@ -47,6 +47,11 @@
 # endif // __DEBUG__
 #endif // WIN32
 
+#ifdef __unix__
+# undef LITTLE_ENDIAN
+# undef BIG_ENDIAN
+#endif // __unix__
+
 enum endian_t { LITTLE_ENDIAN, BIG_ENDIAN };
 
 class CRC64 {
