@@ -31,5 +31,5 @@ This tools supports both Linux and Windows and uses CMake to bridge different bu
 To build this tool, using the following command on an arbitrary operating system with an arbitrary shell:
 
 ```bash
-    git clone https://github.com/Anivice/checksum64 --depth=1 && mkdir checksum64/build && cd checksum64/build && cmake .. -DCMAKE_BUILD_TYPE=Release && cmake --build . --config Release
+git clone https://github.com/Anivice/checksum64 --depth=1 && mkdir checksum64/build && cd checksum64/build && cmake .. -DCMAKE_BUILD_TYPE=Release && cmake --build . --config Release
 ```
