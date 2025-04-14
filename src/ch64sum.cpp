@@ -50,7 +50,41 @@
 #ifdef __unix__
 # undef LITTLE_ENDIAN
 # undef BIG_ENDIAN
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #endif // __unix__
+
+bool is_dir(const char * path) {
+#ifdef __unix__
+    struct stat file_info {};
+
+    // Get information about the file or directory
+    if (stat(path, &file_info) == -1) {
+        debug::log(debug::to_stderr, debug::warning_log, "Stat failed for file", path, "\n");
+        return true;
+    }
+
+    // Check if it's a directory
+    if (S_ISDIR(file_info.st_mode)) {
+        return true;
+    }
+
+    return false;
+#else
+    const DWORD file_attr = GetFileAttributes(path);
+    if (file_attr == INVALID_FILE_ATTRIBUTES) {
+        debug::log(debug::to_stderr, debug::warning_log, "Stat failed for file", path, "\n");
+        return true;
+    }
+
+    if (file_attr & FILE_ATTRIBUTE_DIRECTORY) {
+        return true;
+    }
+
+    return false;
+#endif
+}
 
 enum endian_t { LITTLE_ENDIAN, BIG_ENDIAN };
 
@@ -147,6 +181,7 @@ std::string getEnvVar(const std::string &);
 
 endian_t endian;
 bool disable_all_bullshit_codes = false;
+bool general_error = false;
 
 #ifndef WIN32
 uint64_t hash_a_file(std::string filename)
@@ -158,7 +193,12 @@ uint64_t hash_a_file(const std::string& filename)
     DWORD originalMode { };
 #endif
     std::unique_ptr<std::istream> file_stream;
-    if (filename != "STDIN") {
+    if (filename != "STDIN")
+    {
+        if (is_dir(filename.c_str())) {
+            general_error = true;
+            return 0;
+        }
         file_stream = std::make_unique<std::ifstream>(filename, std::ios::in | std::ios::binary);
     } else {
         file_stream = std::make_unique<std::istream>(std::cin.rdbuf());
@@ -422,6 +462,11 @@ int main(int argc, const char **argv)
             SetConsoleOutputCP(437);
 #endif
             const uint64_t checksum = hash_a_file(filename);
+            if (general_error) {
+                debug::log(debug::to_stderr, debug::warning_log, "Skipped non-regular file ", filename, "\n");
+                general_error = false;
+                return;
+            }
             std::vector < char > data;
             data.resize(sizeof(checksum));
             (*reinterpret_cast<uint64_t *>(data.data())) = checksum;
@@ -497,6 +542,11 @@ int main(int argc, const char **argv)
                     try {
                         file_count++; // before checksum, increase file_count
                         real_checksum = hash_a_file(fname);
+                        if (general_error) {
+                            debug::log(debug::to_stderr, debug::warning_log, "Skipped non-regular file ", filename, "\n");
+                            general_error = false;
+                            continue;
+                        }
                     } catch (const std::exception & e) {
                         debug::log(debug::to_stderr, debug::error_log, e.what(), "\n");
                     }

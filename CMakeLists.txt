@@ -42,7 +42,7 @@ if ("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
     add_compile_definitions(__DEBUG__=\(1\))
 endif ()
 
-add_compile_definitions(CRC64_VERSION="1.1.4")
+add_compile_definitions(CRC64_VERSION="1.1.5")
 
 add_library(log OBJECT src/log.cpp src/include/log.hpp)
 add_library(libbin2hex OBJECT src/bin2hex.cpp src/include/bin2hex.h)
